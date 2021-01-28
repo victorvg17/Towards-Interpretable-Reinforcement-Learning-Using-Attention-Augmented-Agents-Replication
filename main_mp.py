@@ -10,6 +10,8 @@ import torch.multiprocessing as mp
 
 import attention
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 class Policy(nn.Module):
     def __init__(self, agent):
@@ -20,9 +22,8 @@ class Policy(nn.Module):
         self.rewards = []
 
     def forward(self, observation):
-        """Sample action from agents output distribution over actions.
-        """
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        """Sample action from agents output distribution over actions."""
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # Unsqueeze to give a batch size of 1.
         state = torch.from_numpy(observation).float().unsqueeze(0).to(device)
         action_scores, _ = self.agent(state)
@@ -34,8 +35,7 @@ class Policy(nn.Module):
 
 
 def finish_episode(optimizer, policy, config):
-    """Updates model using REINFORCE.
-    """
+    """Updates model using REINFORCE."""
     eps = np.finfo(np.float32).eps.item()
     R = 0
     policy_loss = []
@@ -57,10 +57,12 @@ def finish_episode(optimizer, policy, config):
 
 def train(rank, agent, config):
     env = gym.make("Seaquest-v0")
-    torch.manual_seed(config.seed+rank)
-    env.seed(config.seed+rank)
+    torch.manual_seed(config.seed + rank)
+    env.seed(config.seed + rank)
 
     policy = Policy(agent=agent)
+    # victor: move policy also to gpu if available
+    policy.to(device)
     optimizer = optim.Adam(policy.parameters(), lr=1e-3)
     running_reward = 10.0
 

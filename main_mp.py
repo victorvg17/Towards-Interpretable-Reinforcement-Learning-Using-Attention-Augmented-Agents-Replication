@@ -7,10 +7,35 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch import nn
 import torch.multiprocessing as mp
-
+import pandas as pd
 import attention
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+class StatsLogger:
+    def __init__(self, index):
+        self.index = index
+        self.epi_len = []
+        self.epi_rew = []
+        self.epi_rew_avg = []
+
+    def update_episode_stats(
+        self, timesteps=None, tot_reward=None, running_reward=None
+    ):
+        self.epi_len.append(timesteps)
+        self.epi_rew.append(tot_reward)
+        self.epi_rew_avg.append(running_reward)
+
+    def data_to_csv(self):
+        df_logger = pd.DataFrame(
+            index=range(len(self.epi_len)),
+            columns=["epi_len", "epi_rew", "epi_rew_avg"],
+        )
+        df_logger["epi_len"] = self.epi_len
+        df_logger["epi_rew"] = self.epi_rew
+        df_logger["epi_rew_avg"] = self.epi_rew_avg
+        df_logger.to_csv(f"./logs/logs-{self.index}.csv")
 
 
 class Policy(nn.Module):
@@ -61,6 +86,7 @@ def train(rank, agent, config):
     env.seed(config.seed + rank)
 
     policy = Policy(agent=agent)
+    logger = StatsLogger(index=rank)
     # victor: move policy also to gpu if available
     policy.to(device)
     optimizer = optim.Adam(policy.parameters(), lr=1e-3)
@@ -71,7 +97,7 @@ def train(rank, agent, config):
         observation = env.reset()
         # resets hidden states, otherwise the comp. graph history spans episodes
         # and relies on freed buffers.
-        agent.reset() # NOTE: This may be problematic across processes.
+        agent.reset()  # NOTE: This may be problematic across processes.
         ep_reward = 0
 
         # Stash model in case of crash.
@@ -93,6 +119,10 @@ def train(rank, agent, config):
             if done:
                 running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
                 finish_episode(optimizer, policy, config)
+                # log episode status
+                logger.update_episode_stats(
+                    timesteps=t, tot_reward=ep_reward, running_reward=running_reward
+                )
                 if i_episode % config.log_interval == 0:
                     print(
                         f"Episode {i_episode}-{rank}\tLast reward: {ep_reward:.2f}\tAverage reward: {running_reward:.2f}"
@@ -103,7 +133,9 @@ def train(rank, agent, config):
                         f"the last episode runs to {t} time steps!"
                     )
                 break
+    logger.data_to_csv()
     env.close()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -143,6 +175,6 @@ if __name__ == "__main__":
     agent = attention.Agent(num_actions=num_actions)
     # Hogwild Reinforce.
     agent.share_memory()
+
     mp.spawn(fn=train, args=(agent, config), nprocs=config.num_agents)
     torch.save(agent.state_dict(), f"./models/agent-final.pt")
-    

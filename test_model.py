@@ -20,7 +20,7 @@ if __name__ == "__main__":
         help="debug flag for printing verbose outputs",
     )
     parser.add_argument(
-        "--log-interval",
+        "--log_interval",
         type=int,
         default=1,
         metavar="N",

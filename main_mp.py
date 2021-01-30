@@ -27,7 +27,7 @@ class StatsLogger:
         self.epi_rew.append(tot_reward)
         self.epi_rew_avg.append(running_reward)
 
-    def data_to_csv(self):
+    def save_to_csv(self, csv_file_name: str) -> None:
         df_logger = pd.DataFrame(
             index=range(len(self.epi_len)),
             columns=["epi_len", "epi_rew", "epi_rew_avg"],
@@ -35,7 +35,7 @@ class StatsLogger:
         df_logger["epi_len"] = self.epi_len
         df_logger["epi_rew"] = self.epi_rew
         df_logger["epi_rew_avg"] = self.epi_rew_avg
-        df_logger.to_csv(f"./logs/logs-{self.index}.csv")
+        df_logger.to_csv(csv_file_name)
 
 
 class Policy(nn.Module):
@@ -103,6 +103,7 @@ def train(rank, agent, config):
         # Stash model in case of crash.
         if i_episode % config.save_model_interval == 0 and i_episode > 0:
             torch.save(agent.state_dict(), f"./models/agent-{i_episode}-{rank}.pt")
+            logger.save_to_csv(f"./logs/log-{i_episode}-{rank}.csv")
 
         for t in range(config.max_steps):
             action = policy(observation)
@@ -133,7 +134,10 @@ def train(rank, agent, config):
                         f"the last episode runs to {t} time steps!"
                     )
                 break
-    logger.data_to_csv()
+    logger.save_to_csv(f"./logs/log-final-{rank}.csv")
+    del logger.epi_len
+    del logger.epi_rew
+    del logger.epi_rew_avg
     env.close()
 
 
@@ -156,14 +160,14 @@ if __name__ == "__main__":
     )
     parser.add_argument("--render", action="store_true", help="render the environment")
     parser.add_argument(
-        "--log-interval",
+        "--log_interval",
         type=int,
         default=1,
         metavar="N",
         help="interval between training status logs (default: 10)",
     )
     parser.add_argument(
-        "--save-model-interval",
+        "--save_model_interval",
         type=int,
         default=250,
         help="interval between saving models.",

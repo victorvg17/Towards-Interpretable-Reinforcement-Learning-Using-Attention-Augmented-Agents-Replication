@@ -46,12 +46,12 @@ class Policy(nn.Module):
         self.saved_log_probs = []
         self.rewards = []
 
-    def forward(self, observation):
+    def forward(self, observation, ts=0):
         """Sample action from agents output distribution over actions."""
         # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # Unsqueeze to give a batch size of 1.
         state = torch.from_numpy(observation).float().unsqueeze(0).to(device)
-        action_scores, _ = self.agent(state)
+        action_scores, _ = self.agent(state, ts=ts)
         action_probs = F.softmax(action_scores, dim=-1)
         dist = torch.distributions.Categorical(action_probs)
         action = dist.sample()
@@ -106,7 +106,8 @@ def train(rank, agent, config):
             logger.save_to_csv(f"./logs/log-{i_episode}-{rank}.csv")
 
         for t in range(config.max_steps):
-            action = policy(observation)
+            # action = policy(observation)
+            action = policy(observation, ts=t)
             reward = 0.0
             for _ in range(config.num_repeat_action):
                 if config.render:
@@ -135,9 +136,9 @@ def train(rank, agent, config):
                     )
                 break
     logger.save_to_csv(f"./logs/log-final-{rank}.csv")
-    del logger.epi_len
-    del logger.epi_rew
-    del logger.epi_rew_avg
+    # del logger.epi_len
+    # del logger.epi_rew
+    # del logger.epi_rew_avg
     env.close()
 
 

@@ -3,10 +3,11 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+
 class ConvLSTMCell(nn.Module):
     def __init__(self, input_channels, hidden_channels, kernel_size):
         """Initialize stateful ConvLSTM cell.
-        
+
         Parameters
         ----------
         input_channels : ``int``
@@ -15,14 +16,14 @@ class ConvLSTMCell(nn.Module):
             Number of channels of hidden state.
         kernel_size : ``int``
             Size of the convolutional kernel.
-            
+
         Paper
         -----
         https://papers.nips.cc/paper/5955-convolutional-lstm-network-a-machine-learning-approach-for-precipitation-nowcasting.pdf
-        
+
         Referenced code
         ---------------
-        https://github.com/automan000/Convolution_LSTM_PyTorch/blob/master/convolution_lstm.py        
+        https://github.com/automan000/Convolution_LSTM_PyTorch/blob/master/convolution_lstm.py
         """
         super(ConvLSTMCell, self).__init__()
 
@@ -185,7 +186,11 @@ class QueryNetwork(nn.Module):
         super(QueryNetwork, self).__init__()
         # TODO: Add proper non-linearity.
         self.model = nn.Sequential(
-            nn.Linear(256, 128), nn.ReLU(), nn.Linear(128, 288), nn.ReLU(), nn.Linear(288, 288)
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 288),
+            nn.ReLU(),
+            nn.Linear(288, 288),
         )
 
     def forward(self, query):
@@ -203,17 +208,21 @@ class SpatialBasis:
     def __init__(self, height=27, width=20, channels=64):
         h, w, d = height, width, channels
 
-        p_h = torch.mul(torch.arange(1, h+1).unsqueeze(1).float(), torch.ones(1, w).float()) * (np.pi / h)
-        p_w = torch.mul(torch.ones(h, 1).float(), torch.arange(1, w+1).unsqueeze(0).float()) * (np.pi / w)
-        
+        p_h = torch.mul(
+            torch.arange(1, h + 1).unsqueeze(1).float(), torch.ones(1, w).float()
+        ) * (np.pi / h)
+        p_w = torch.mul(
+            torch.ones(h, 1).float(), torch.arange(1, w + 1).unsqueeze(0).float()
+        ) * (np.pi / w)
+
         # NOTE: I didn't quite see how U,V = 4 made sense given that the authors form the spatial
         # basis by taking the outer product of the values. Still, I think what I have is aligned with what
         # they did, but I am less confident in this step.
-        U = V = 8 # size of U, V. 
-        u_basis = v_basis = torch.arange(1, U+1).unsqueeze(0).float()
+        U = V = 8  # size of U, V.
+        u_basis = v_basis = torch.arange(1, U + 1).unsqueeze(0).float()
         a = torch.mul(p_h.unsqueeze(2), u_basis)
         b = torch.mul(p_w.unsqueeze(2), v_basis)
-        out = torch.einsum('hwu,hwv->hwuv', torch.cos(a), torch.cos(b)).reshape(h, w, d)
+        out = torch.einsum("hwu,hwv->hwuv", torch.cos(a), torch.cos(b)).reshape(h, w, d)
         self.S = out
 
     def __call__(self, X):
@@ -255,8 +264,7 @@ class Agent(nn.Module):
         c_s: int = 64,
         num_queries: int = 4,
     ):
-        """Agent implementing the attention agent.
-        """
+        """Agent implementing the attention agent."""
         super(Agent, self).__init__()
         self.hidden_size = hidden_size
         self.c_v, self.c_k, self.c_s, self.num_queries = c_v, c_k, c_s, num_queries
@@ -287,7 +295,7 @@ class Agent(nn.Module):
         self.prev_output = None
         self.prev_hidden = None
 
-    def forward(self, X, prev_reward=None, prev_action=None):
+    def forward(self, X, prev_reward=None, prev_action=None, ts=0):
 
         # 0. Setup.
         # ---------
